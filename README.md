@@ -232,7 +232,7 @@ You **cannot open them in a text editor** — they are loaded by Python using `j
 
 **Bhavana Chennu**
 
-Built to helping students prepare smarter for campus placements.
+Built to help students prepare smarter for campus placements.
 
 ---
 
