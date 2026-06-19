@@ -13,13 +13,10 @@ st.set_page_config(
 )
 
 # Load CSS (inline for Streamlit Cloud compatibility)
-# For local dev: reads from styles.css
-# For cloud: CSS is embedded below
 try:
     with open("styles.css") as f:
         css = f.read()
 except FileNotFoundError:
-    # Fallback CSS for Streamlit Cloud deployment
     css = """
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Sora:wght@400;600;700;800&display=swap');
     html, body, [class*="css"] { font-family: 'Inter', 'Sora', sans-serif !important; }
@@ -117,7 +114,7 @@ def load_models():
     feat_cols = joblib.load('models/feature_columns.pkl')
     ohe_cats  = joblib.load('models/ohe_categories.pkl')
     metrics   = joblib.load('models/model_metrics.pkl')
-    metrics.setdefault('dataset_size', 3000)
+    metrics.setdefault('dataset_size', 5000)
     metrics.setdefault('placed_rate', 73.0)
     return rf, scaler, encoders, feat_cols, ohe_cats, metrics
 
@@ -322,7 +319,7 @@ if st.session_state.page == 'home':
         <div class="feature-card">
             <div class="feature-icon">🤖</div>
             <div class="feature-title">AI Prediction</div>
-            <div class="feature-desc">Random Forest model trained on 3,000+ student records for accurate placement forecasting.</div>
+            <div class="feature-desc">Random Forest model trained on 5,000+ student records for accurate placement forecasting.</div>
         </div>
         <div class="feature-card">
             <div class="feature-icon">📊</div>
@@ -377,24 +374,35 @@ elif st.session_state.page == 'input':
         """, unsafe_allow_html=True)
 
         c1, c2, c3 = st.columns(3)
-        with c1: gender = st.selectbox("Gender", ["Male", "Female"])
-        with c2: stream = st.selectbox("Stream", ["CS", "ECE", "ME", "Civil", "EE", "IT", "Other"])
-        with c3: cgpa   = st.number_input("CGPA (out of 10)", 0.0, 10.0, 7.5, 0.01, "%.2f")
+        with c1:
+            gender = st.selectbox("Gender", ["Male", "Female", "Others"], index=None, placeholder="Select gender...")
+        with c2:
+            stream = st.selectbox("Stream", [
+                "Computer Science", "Information Technology", "Electronics",
+                "Mechanical", "Civil", "Electrical", "Other"
+            ], index=None, placeholder="Select stream...")
+        with c3:
+            cgpa = st.number_input("CGPA (out of 10)", 0.0, 10.0, None, 0.01, "%.2f")
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
         c4, c5, c6 = st.columns(3)
-        with c4: tenth_board  = st.selectbox("10th Board", ["CBSE", "State", "ICSE", "Other"])
-        with c5: tenth_marks  = st.number_input("10th Marks (%)", 0.0, 100.0, 75.0, 0.1, "%.1f")
-        with c6: twelfth_board = st.selectbox("12th Board", ["CBSE", "State", "ICSE", "Other"])
+        with c4:
+            tenth_board = st.selectbox("10th Board", ["CBSE", "State", "ICSE", "Other"], index=None, placeholder="Select board...")
+        with c5:
+            tenth_marks = st.number_input("10th Marks (%)", 0.0, 100.0, None, 0.1, "%.1f")
+        with c6:
+            twelfth_board = st.selectbox("12th Board", ["CBSE", "State", "ICSE", "Other"], index=None, placeholder="Select board...")
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
         c7, c8, c9 = st.columns(3)
-        with c7: twelfth_marks = st.number_input("12th Marks (%)", 0.0, 100.0, 72.0, 0.1, "%.1f")
-        with c8: communication = st.selectbox("Communication Level", [1, 2, 3, 4, 5], index=2,
-                                               help="1 = Poor  |  3 = Average  |  5 = Excellent")
-        with c9: technical = st.selectbox("Technical Skills", ["No", "Yes"])
+        with c7:
+            twelfth_marks = st.number_input("12th Marks (%)", 0.0, 100.0, None, 0.1, "%.1f")
+        with c8:
+            communication = st.selectbox("Communication Level", [1, 2, 3, 4, 5], index=None, placeholder="Select level...")
+        with c9:
+            technical = st.selectbox("Technical Skills", ["No", "Yes"], index=None, placeholder="Select...")
 
         st.markdown("""
         <div class="form-section" style="margin-top:1.5rem;">
@@ -407,42 +415,81 @@ elif st.session_state.page == 'input':
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
         c10, c11, c12, c13 = st.columns(4)
-        with c10: internships = st.number_input("Internships",          0, 20, 0, 1, help="Completed internships")
-        with c11: trainings   = st.number_input("Trainings / Courses",  0, 20, 0, 1, help="Certified training programs")
-        with c12: projects    = st.number_input("Projects",             0, 20, 0, 1, help="Academic or personal projects")
-        with c13: backlogs    = st.number_input("Active Backlogs",      0, 20, 0, 1, help="Pending backlogs right now")
+        with c10:
+            internships = st.number_input("Internships", 0, 20, None, 1)
+        with c11:
+            trainings = st.number_input("Trainings / Courses", 0, 20, None, 1)
+        with c12:
+            projects = st.number_input("Projects", 0, 20, None, 1)
+        with c13:
+            backlogs = st.number_input("Active Backlogs", 0, 20, None, 1)
+
+        st.markdown("""
+        <div class="form-section" style="margin-top:1.5rem;">
+            <div class="form-section-dot" style="background:#f59e0b;"></div>
+            <span class="form-section-emoji">🧠</span>
+            <span class="form-section-label">Skills &amp; Assessments</span>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+
+        c14, c15 = st.columns(2)
+        with c14:
+            coding_score = st.number_input("Coding Score (0-100) from previous tests", 0, 100, None, 1)
+        with c15:
+            aptitude_score = st.number_input("Aptitude Score (0-100) from previous tests", 0, 100, None, 1)
+
+        c16, c17 = st.columns(2)
+        with c16:
+            hackathons_count = st.number_input("Hackathons Count", 0, 20, None, 1)
+        with c17:
+            certifications_count = st.number_input("Certifications Count", 0, 20, None, 1)
 
         submitted = st.form_submit_button("🔮  Predict My Placement Chances", width='stretch')
 
     if submitted:
-        fv = {
-            'Gender': gender, '10th board': tenth_board, '10th marks': tenth_marks,
-            '12th board': twelfth_board, '12th marks': twelfth_marks, 'Stream': stream,
-            'Cgpa': cgpa,
-            'Internships(Y/N)':       "Yes" if internships > 0 else "No",
-            'Training(Y/N)':          "Yes" if trainings   > 0 else "No",
-            'Any Backlogs?':          "Yes" if backlogs    > 0 else "No",
-            'Innovative Project(Y/N)':"Yes" if projects    > 0 else "No",
-            'Communication level': communication,
-            'Technical skills(Y/N)': technical,
-            '_backlogs': backlogs, '_internships': internships,
-            '_projects': projects, '_trainings': trainings,
+        required_fields = {
+            'Gender': gender, 'Stream': stream, 'Cgpa': cgpa,
+            '10th board': tenth_board, '10th marks': tenth_marks,
+            '12th board': twelfth_board, '12th marks': twelfth_marks,
+            'Communication level': communication, 'Technical skills(Y/N)': technical,
+            'Internships': internships, 'Trainings': trainings,
+            'Projects': projects, 'Backlogs': backlogs,
+            'Coding Score': coding_score, 'Aptitude Score': aptitude_score,
+            'Hackathons Count': hackathons_count, 'Certifications Count': certifications_count
         }
-        input_df   = build_input({k: v for k, v in fv.items() if not k.startswith('_')})
-        prediction = rf_model.predict(input_df)[0]
-        proba      = rf_model.predict_proba(input_df)[0]
-        placed_pct = round(proba[1] * 100, 1)
-        recs       = get_recommendations(fv, prediction)
 
-        st.session_state.result_data = {
-            'prediction': prediction, 'placed_pct': placed_pct, 'recs': recs,
-            'cgpa': cgpa, 'backlogs': backlogs, 'internships': internships,
-            'projects': projects, 'communication': communication, 'technical': technical,
-        }
-        st.session_state.page = 'result'
-        st.rerun()
+        empty_fields = [k for k, v in required_fields.items() if v is None]
+        if empty_fields:
+            st.error(f"⚠️ Please fill all fields. Missing: {', '.join(empty_fields)}")
+        else:
+            fv = {
+                'Gender': gender, '10th board': tenth_board, '10th marks': tenth_marks,
+                '12th board': twelfth_board, '12th marks': twelfth_marks, 'Stream': stream,
+                'Cgpa': cgpa,
+                'Internships(Y/N)':       "Yes" if internships > 0 else "No",
+                'Training(Y/N)':          "Yes" if trainings   > 0 else "No",
+                'Any Backlogs?':          "Yes" if backlogs    > 0 else "No",
+                'Innovative Project(Y/N)':"Yes" if projects    > 0 else "No",
+                'Communication level': communication,
+                'Technical skills(Y/N)': technical,
+                '_backlogs': backlogs, '_internships': internships,
+                '_projects': projects, '_trainings': trainings,
+            }
+            input_df   = build_input({k: v for k, v in fv.items() if not k.startswith('_')})
+            prediction = rf_model.predict(input_df)[0]
+            proba      = rf_model.predict_proba(input_df)[0]
+            placed_pct = round(proba[1] * 100, 1)
+            recs       = get_recommendations(fv, prediction)
+
+            st.session_state.result_data = {
+                'prediction': prediction, 'placed_pct': placed_pct, 'recs': recs,
+                'cgpa': cgpa, 'backlogs': backlogs, 'internships': internships,
+                'projects': projects, 'communication': communication, 'technical': technical,
+            }
+            st.session_state.page = 'result'
+            st.rerun()
 
     st.markdown('<div class="foot">Developed by Bhavana Chennu · Powered by Random Forest AI</div>',
                 unsafe_allow_html=True)
@@ -462,7 +509,6 @@ elif st.session_state.page == 'result':
     comm       = d['communication']
     tech       = d['technical']
 
-    # Auto-scroll to top so heading and buttons are visible first
     st.markdown("""
     <script>
         window.scrollTo(0, 0);
