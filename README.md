@@ -1,6 +1,6 @@
-# 🎓 Campus Placement Predictor v2.0
+# 🎓 Campus Placement Predictor 
 
-**AI-powered web application that predicts campus placement chances using 15 real-world factors across academics, skills, and experience.**
+**AI-powered web application that predicts campus placement chances using 17 real-world factors across academics, skills, and experience.**
 
 Built with **Streamlit** + **Random Forest ML** — enter your complete profile, get an instant prediction with actionable improvement tips.
 
@@ -8,9 +8,9 @@ Built with **Streamlit** + **Random Forest ML** — enter your complete profile,
 
 ## 🪟 Project Overview
 
-This application analyzes **15 placement factors** across 3 dimensions to predict placement probability:
+This application analyzes **17 placement factors** across 3 dimensions to predict placement probability:
 
-### 📚 Academic (6 factors)
+### 📚 Academic (8 factors)
 - Gender, Stream, B.Tech CGPA, 10th Board & Marks, 12th Board & Marks, Active Backlogs
 
 ### 🧠 Skills (4 factors)
@@ -20,8 +20,8 @@ This application analyzes **15 placement factors** across 3 dimensions to predic
 - Internship Count, Project Count, Certifications Count, Hackathons Count, Trainings Attended
 
 ### What it does:
-- **Predicts placement probability** using Random Forest trained on **5,000+ student records**
-- **Visual profile breakdown** — score bars for all 15 factors
+- **Predicts placement probability** using Random Forest trained on **5,000 student records**
+- **Visual profile breakdown** — score bars for all 17 factors
 - **Personalised recommendations** — sorted by urgency (Critical → Improve → Strengths)
 - **Interactive animations** — confetti/fireworks for placed, rain drops for needs improvement
 - **3-page navigation** — Home → Profile Input → Results
@@ -146,8 +146,8 @@ https://yourusername-campus-placement-predictor-app-abc123.streamlit.app
 
 | Feature | Description |
 |---------|-------------|
-| 🤖 **15-Factor AI Prediction** | Random Forest on 5,000 records with academic + skills + experience |
-| 📊 **3-Section Profile Breakdown** | Visual score bars across all 15 factors |
+| 🤖 **17-Factor AI Prediction** | Random Forest on 5,000 records with academic + skills + experience |
+| 📊 **3-Section Profile Breakdown** | Visual score bars across all 17 factors |
 | 💡 **Smart Recommendations** | Prioritised by urgency: Critical → Improve → Strengths |
 | 🎉 **Celebration Animations** | Confetti + fireworks for placed, rain drops for needs improvement |
 | 🎨 **Modern UI** | Gradient headings, floating particles, smooth transitions |
@@ -156,9 +156,9 @@ https://yourusername-campus-placement-predictor-app-abc123.streamlit.app
 
 ---
 
-## 📝 Input Features (15 Factors)
+## 📝 Input Features (17 Factors)
 
-### 📚 Academic
+### 📚 Academic (8 factors)
 | Feature | Type | Range |
 |---------|------|-------|
 | Gender | Categorical | Male / Female / Others |
@@ -170,7 +170,7 @@ https://yourusername-campus-placement-predictor-app-abc123.streamlit.app
 | 12th Marks | Numeric | 0 – 100% |
 | Active Backlogs | Numeric | 0 – 20 |
 
-### 🧠 Skills
+### 🧠 Skills (4 factors)
 | Feature | Type | Range |
 |---------|------|-------|
 | Coding Score | Numeric | 0 – 100 |
@@ -178,7 +178,7 @@ https://yourusername-campus-placement-predictor-app-abc123.streamlit.app
 | Communication Level | Numeric | 1 – 5 |
 | Technical Skills | Categorical | Yes / No |
 
-### 💼 Experience
+### 💼 Experience (5 factors)
 | Feature | Type | Range |
 |---------|------|-------|
 | Internship Count | Numeric | 0 – 20 |
@@ -187,13 +187,15 @@ https://yourusername-campus-placement-predictor-app-abc123.streamlit.app
 | Hackathons Count | Numeric | 0 – 20 |
 | Trainings / Courses | Numeric | 0 – 20 |
 
+**Total: 8 + 4 + 5 = 17 factors**
+
 ---
 
 ## 📊 Model Performance
 
 - **Algorithm**: Random Forest Classifier (1,000 estimators)
-- **Test Accuracy**: **94%**
-- **Cross-Validation**: 5-fold stratified — **93.4% ± 0.8%**
+- **Test Accuracy**: **94.1%**
+- **Cross-Validation**: 5-fold stratified — **93.16% ± 0.9%**
 - **ROC-AUC**: **0.967**
 - **Class Balancing**: `class_weight='balanced'`
 - **Dataset Size**: 5,000 student records
