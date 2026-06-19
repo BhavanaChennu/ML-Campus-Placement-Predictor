@@ -11,16 +11,13 @@ import warnings
 warnings.filterwarnings('ignore')
 
 print("=" * 60)
-print("  CAMPUS PLACEMENT PREDICTOR v2.0 — MODEL TRAINING")
+print("  CAMPUS PLACEMENT PREDICTOR — MODEL TRAINING")
 print("=" * 60)
 
 os.makedirs('models', exist_ok=True)
 os.makedirs('Dataset', exist_ok=True)
 
-np.random.seed(42)
-n = 5000
-
-# Load dataset
+# Load dataset from CSV
 df = pd.read_csv('Dataset/Placements_data.csv')
 print(f"\nLoaded dataset: {df.shape[0]} rows, {df.shape[1]} columns")
 
@@ -30,57 +27,74 @@ for col in df.select_dtypes(include='number').columns:
 for col in df.select_dtypes(include='object').columns:
     df[col].fillna(df[col].mode()[0], inplace=True)
 
-binary_cols = ['Gender', 'Internships(Y/N)', 'Training(Y/N)',
-               'Any Backlogs?', 'Innovative Project(Y/N)', 'Technical skills(Y/N)']
+# Label Encoding for binary columns
+binary_cols = ['Gender', 'Technical skills(Y/N)']
 label_encoders = {}
 for col in binary_cols:
     le = LabelEncoder()
     df[col] = le.fit_transform(df[col])
     label_encoders[col] = le
+    print(f"  Encoded {col}: {list(le.classes_)}")
 
+# Target encoding
 target_le = LabelEncoder()
 df['Placement(Y/N)?'] = target_le.fit_transform(df['Placement(Y/N)?'])
+print(f"  Target classes: {list(target_le.classes_)}")
 
+# One-hot encoding for multi-class categorical columns
 multi_cols = ['10th board', '12th board', 'Stream']
 ohe_categories = {col: sorted(df[col].unique().tolist()) for col in multi_cols}
 df_encoded = pd.get_dummies(df, columns=multi_cols, drop_first=True)
 
+# Features and target
 X = df_encoded.drop('Placement(Y/N)?', axis=1)
 y = df_encoded['Placement(Y/N)?']
 feature_cols = list(X.columns)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+print(f"\nFinal features ({len(feature_cols)}):")
+for i, f in enumerate(feature_cols):
+    print(f"  {i+1:2d}. {f}")
 
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# Scale numeric features
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Train Random Forest
+# ─── Train Optimized Random Forest ───
 print("\n" + "-" * 50)
-print("Training Random Forest...")
+print("Training Optimized Random Forest...")
 print("-" * 50)
 
 rf = RandomForestClassifier(
-    n_estimators=500,
-    max_depth=None,
+    n_estimators=1000,
+    max_depth=30,
     min_samples_split=2,
     min_samples_leaf=1,
     random_state=42,
     class_weight='balanced',
-    n_jobs=-1
+    n_jobs=-1,
+    max_features='sqrt'
 )
 rf.fit(X_train, y_train)
 
+# Predictions
 y_pred = rf.predict(X_test)
 acc = accuracy_score(y_test, y_pred)
 auc = roc_auc_score(y_test, rf.predict_proba(X_test)[:, 1])
 
+# Cross-validation
 cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 cv_scores = cross_val_score(rf, X, y, cv=cv, scoring='accuracy')
 
-print(f"  Test Accuracy: {acc:.4f} ({acc*100:.1f}%)")
-print(f"  ROC-AUC:       {auc:.4f}")
-print(f"  CV Accuracy:   {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+print(f"\n  Test Accuracy:  {acc:.4f} ({acc*100:.1f}%)")
+print(f"  ROC-AUC:        {auc:.4f}")
+print(f"  CV Accuracy:    {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+print(f"\n  Classification Report:")
 print(classification_report(y_test, y_pred, target_names=['Not Placed', 'Placed']))
 
 # Feature importance
@@ -89,7 +103,7 @@ top10 = importances.sort_values(ascending=False).head(10)
 print("\nTop 10 Feature Importances:")
 for feat, imp in top10.items():
     bar = "█" * int(imp * 100)
-    print(f"  {feat:<40} {imp:.4f}  {bar}")
+    print(f"  {feat:<35} {imp:.4f}  {bar}")
 
 # Save confusion matrix
 fig, ax = plt.subplots(figsize=(6, 5))
@@ -113,8 +127,10 @@ joblib.dump({
     'rf_cv': round(cv_scores.mean() * 100, 1),
     'dataset_size': len(df),
     'placed_rate': round((df['Placement(Y/N)?'] == 1).mean() * 100, 1),
-    'top_features': top10.reset_index().rename(columns={'index': 'feature', 0: 'importance'}).to_dict(orient='records')
+    'top_features': top10.reset_index().rename(
+        columns={'index': 'feature', 0: 'importance'}
+    ).to_dict(orient='records')
 }, 'models/model_metrics.pkl')
 
-print("\n✓ All artifacts saved!")
+print("\n✓ All artifacts saved to models/")
 print("✓ Training complete!")

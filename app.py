@@ -115,7 +115,7 @@ def load_models():
     ohe_cats  = joblib.load('models/ohe_categories.pkl')
     metrics   = joblib.load('models/model_metrics.pkl')
     metrics.setdefault('dataset_size', 5000)
-    metrics.setdefault('placed_rate', 73.0)
+    metrics.setdefault('placed_rate', 68.0)
     return rf, scaler, encoders, feat_cols, ohe_cats, metrics
 
 rf_model, scaler, encoders, feature_cols, ohe_categories, metrics = load_models()
@@ -124,31 +124,22 @@ rf_model, scaler, encoders, feature_cols, ohe_categories, metrics = load_models(
 # ─── Build Input DataFrame for Prediction ───
 def build_input(fv: dict) -> pd.DataFrame:
     row = fv.copy()
-    norm_enc = {
-        k.lower().replace(" ","").replace("_","").replace("-",""): k
-        for k in encoders.keys()
-    }
-    def enc_key(field):
-        n = field.lower().replace(" ","").replace("_","").replace("-","")
-        if n in norm_enc: return norm_enc[n]
-        for nk, ak in norm_enc.items():
-            if n in nk or nk in n: return ak
-        return None
 
-    for col in ['Gender','Internships(Y/N)','Training(Y/N)','Any Backlogs?',
-                'Innovative Project(Y/N)','Technical skills(Y/N)']:
+    # Encode binary categorical columns
+    for col in ['Gender', 'Technical skills(Y/N)']:
         val = row[col]
-        ek = enc_key(col)
-        if ek and ek in encoders:
-            row[col] = encoders[ek].transform([val])[0] if val in encoders[ek].classes_ else 0
+        if col in encoders:
+            row[col] = encoders[col].transform([val])[0] if val in encoders[col].classes_ else 0
         else:
-            row[col] = 1 if val in ['Yes','Male','True','1'] else 0
+            row[col] = 1 if val == 'Male' else 0
 
-    for col in ['10th board','12th board','Stream']:
+    # One-hot encode multi-class categorical columns
+    for col in ['10th board', '12th board', 'Stream']:
         val = row.pop(col)
         for cat in ohe_categories[col][1:]:
             row[f"{col}_{cat}"] = 1 if val == cat else 0
 
+    # Build DataFrame with exact feature column order
     df = pd.DataFrame([row])
     for c in feature_cols:
         if c not in df.columns:
@@ -159,86 +150,160 @@ def build_input(fv: dict) -> pd.DataFrame:
 # ─── Generate Recommendations Based on Profile ────
 def get_recommendations(fv: dict, prediction: int) -> list:
     cgpa   = float(fv['Cgpa'])
-    blogs  = int(fv['_backlogs'])
-    ints   = int(fv['_internships'])
-    projs  = int(fv['_projects'])
-    trains = int(fv['_trainings'])
+    blogs  = int(fv['Backlogs'])
+    ints   = int(fv['Internships'])
+    projs  = int(fv['Projects'])
+    trains = int(fv['Trainings'])
     comm   = int(fv['Communication level'])
     tech   = fv['Technical skills(Y/N)']
     t10    = float(fv['10th marks'])
     t12    = float(fv['12th marks'])
+    coding = int(fv['Coding Score'])
+    apt    = int(fv['Aptitude Score'])
+    hacks  = int(fv['Hackathons Count'])
+    certs  = int(fv['Certifications Count'])
 
     tips = []
 
+    # ─── URGENT ───
     if blogs > 0:
-        tips.append(dict(icon='⛔', title='Clear your backlogs immediately',
-            desc=f'You have {blogs} pending backlog(s). 80%+ of companies auto-reject candidates with active backlogs — this is your #1 priority before anything else.',
+        tips.append(dict(icon='⛔', title=f'Clear your {blogs} backlog{"s" if blogs > 1 else ""} immediately',
+            desc=f'You have {blogs} pending backlog{"s" if blogs > 1 else ""}. Most companies auto-reject candidates with active backlogs — this is your #1 priority.',
             urgency='urgent'))
-    if cgpa < 6.0:
+    if cgpa < 5.5:
         tips.append(dict(icon='📉', title=f'CGPA {cgpa:.2f} is critically low',
-            desc='Most companies filter at 6.5 minimum during resume screening. Below 6.0, you may not clear the eligibility round at all. Prioritise your grades this semester.',
+            desc='Most companies filter at 6.0+ minimum during resume screening. Below 5.5, you are likely to be filtered out before interviews even begin.',
             urgency='urgent'))
-    if t10 < 55 or t12 < 55:
-        tips.append(dict(icon='📋', title='10th / 12th marks below threshold',
-            desc='Many companies require 60%+ in both 10th and 12th for basic eligibility. Review criteria for each company you target.',
+    if t10 < 50 or t12 < 50:
+        tips.append(dict(icon='📋', title='10th / 12th marks below 50%',
+            desc='Many companies require 60%+ in both 10th and 12th for basic eligibility. Some relax to 50% but options become very limited.',
+            urgency='urgent'))
+    if coding < 30 and fv['Stream'] in ['Computer Science', 'Information Technology']:
+        tips.append(dict(icon='💻', title='Coding score critically low for CS/IT',
+            desc=f'Your coding score ({coding}) is far below the average for CS/IT students. DSA and problem-solving are non-negotiable for tech placements.',
             urgency='urgent'))
 
-    if 6.0 <= cgpa < 7.5:
-        tips.append(dict(icon='📚', title='Target a CGPA above 7.5',
-            desc='A CGPA of 7.5+ is the standard filter for most campus drives. Even a 0.3-point improvement this semester meaningfully expands your options.',
+    # ─── IMPROVE ───
+    if 5.5 <= cgpa < 6.5:
+        tips.append(dict(icon='📚', title='Push CGPA above 6.5',
+            desc='A CGPA of 6.5+ is the minimum filter for most campus drives. Focus on scoring well in upcoming exams.',
+            urgency='improve'))
+    elif 6.5 <= cgpa < 7.5:
+        tips.append(dict(icon='📚', title='Target 7.5+ CGPA for better opportunities',
+            desc='Top-tier companies commonly filter at 7.0–7.5. Consistent effort this semester can unlock better companies.',
             urgency='improve'))
     elif 7.5 <= cgpa < 8.5:
-        tips.append(dict(icon='📚', title='Push towards 8.5+ CGPA',
-            desc='Top-tier companies commonly filter at 8.0–8.5. Consistent performance over the next semester can get you there.',
+        tips.append(dict(icon='📚', title='Aim for 8.5+ CGPA',
+            desc='Premium companies and core roles often filter at 8.0+. You are close — push for that extra edge.',
             urgency='improve'))
 
     if ints == 0:
         tips.append(dict(icon='🎯', title='Get at least one internship',
-            desc='An internship — even 4 weeks, even virtual — signals real-world exposure to recruiters. Apply on Internshala, LinkedIn, or company career portals now.',
+            desc='Zero internships is a red flag for most recruiters. Even a 4-week virtual internship adds credibility. Apply on Internshala, LinkedIn, or company portals.',
             urgency='improve'))
+    elif ints == 1:
+        tips.append(dict(icon='🎯', title='Consider a second internship',
+            desc='One internship is good, but two+ shows sustained industry exposure. It significantly improves your resume weight.',
+            urgency='improve'))
+
     if projs == 0:
-        tips.append(dict(icon='🔬', title='Build 2–3 projects',
-            desc='Interviewers routinely ask "what have you built?" GitHub projects in your domain are among the strongest differentiators in tech interviews.',
+        tips.append(dict(icon='🔬', title='Build 2–3 quality projects',
+            desc='Interviewers always ask "what have you built?" Start with one project in your domain and host it on GitHub with a clean README.',
             urgency='improve'))
+    elif projs == 1:
+        tips.append(dict(icon='🔬', title='Add one more project',
+            desc='A single project is thin. Build a second one that demonstrates a different skill or technology stack.',
+            urgency='improve'))
+
     if tech == 'No':
-        tips.append(dict(icon='💻', title='Develop your technical skills',
-            desc='Certify in at least one area: DSA on LeetCode, Python, SQL, or a cloud platform (AWS Free Tier). Technical aptitude tests appear in 90%+ of placement rounds.',
+        tips.append(dict(icon='⚡', title='Develop technical skills',
+            desc='Technical skills are essential for almost every placement round. Pick one: Python, Java, SQL, or a cloud platform (AWS/GCP free tier).',
             urgency='improve'))
+
+    if coding < 50:
+        tips.append(dict(icon='💻', title=f'Improve coding score (currently {coding})',
+            desc='Practice on LeetCode, HackerRank, or CodeChef. Aim for 60+ to clear most technical aptitude rounds comfortably.',
+            urgency='improve'))
+    elif 50 <= coding < 70:
+        tips.append(dict(icon='💻', title=f'Push coding score from {coding} to 70+',
+            desc='You are in the average zone. 70+ puts you in the top tier for coding rounds. Focus on arrays, strings, and basic DSA.',
+            urgency='improve'))
+
+    if apt < 50:
+        tips.append(dict(icon='🧮', title=f'Improve aptitude score (currently {apt})',
+            desc='Aptitude tests are the first gate in 90% of companies. Practice quantitative, logical, and verbal sections daily.',
+            urgency='improve'))
+
     if comm <= 2:
         tips.append(dict(icon='🗣️', title='Improve communication skills',
-            desc='Weak communication is a frequent reason for rejections even after clearing technical rounds. Join mock GD/PI groups or practice with peers regularly.',
+            desc='Weak communication is a top reason for HR round rejections. Join mock GD/PI groups or practice with peers regularly.',
             urgency='improve'))
     elif comm == 3:
         tips.append(dict(icon='🗣️', title='Level up communication to 4+',
-            desc='Average communication often costs candidates their offer after the HR round. Practice structured answers (STAR method) and mock interviews.',
-            urgency='improve'))
-    if trains == 0 and ints == 0:
-        tips.append(dict(icon='🏅', title='Add certifications or training',
-            desc='NPTEL, Coursera, or company-run certifications fill the experience gap. They signal initiative and add legitimacy to your resume when work experience is thin.',
+            desc='Average communication often costs candidates their offer after the HR round. Practice structured answers using the STAR method.',
             urgency='improve'))
 
+    if hacks == 0:
+        tips.append(dict(icon='🏆', title='Participate in a hackathon',
+            desc='Hackathons demonstrate problem-solving under pressure and teamwork. Even participation without winning adds value to your profile.',
+            urgency='improve'))
+
+    if certs == 0 and ints == 0:
+        tips.append(dict(icon='🏅', title='Add certifications or training',
+            desc='NPTEL, Coursera, or AWS Free Tier certifications signal initiative. They help when work experience is limited.',
+            urgency='improve'))
+    elif certs == 0 and ints >= 1:
+        tips.append(dict(icon='🏅', title='Add a certification',
+            desc='You have internship experience — add a certification to round out your profile and show continuous learning.',
+            urgency='improve'))
+
+    if trains == 0:
+        tips.append(dict(icon='📖', title='Pursue a training or workshop',
+            desc='Formal training shows structured learning. Look for college workshops, NPTEL courses, or company-sponsored programs.',
+            urgency='improve'))
+
+    # ─── GOOD ───
     if cgpa >= 8.0 and blogs == 0:
         tips.append(dict(icon='✅', title=f'Strong academic record ({cgpa:.2f} CGPA)',
-            desc='You clear the academic filter for the vast majority of campus drives. Keep consistency through your final semester.',
+            desc='You clear the academic filter for most campus drives. Maintain consistency through your final semester.',
             urgency='good'))
-    if ints >= 1:
-        tips.append(dict(icon='✅', title=f'{ints} internship(s) — great signal',
-            desc='Internship experience is one of the strongest signals on a student resume. Prepare to speak fluently about the work, impact, and learnings from each role.',
+    if ints >= 2:
+        tips.append(dict(icon='✅', title=f'{ints} internships — excellent signal',
+            desc='Multiple internships show sustained industry engagement. Be ready to articulate what you learned and delivered in each role.',
             urgency='good'))
-    if projs >= 2:
-        tips.append(dict(icon='✅', title=f'{projs} projects on your profile',
-            desc='A strong project portfolio shows initiative and practical skills. Make sure each project is documented clearly on GitHub with a README.',
+    elif ints == 1 and cgpa >= 7.0:
+        tips.append(dict(icon='✅', title='Balanced profile: internship + academics',
+            desc='You have both internship exposure and a solid CGPA. This is a well-rounded profile for most companies.',
+            urgency='good'))
+    if projs >= 3:
+        tips.append(dict(icon='✅', title=f'{projs} projects — strong portfolio',
+            desc='A multi-project portfolio shows depth and versatility. Ensure each has clear documentation and a live demo or GitHub link.',
+            urgency='good'))
+    if coding >= 75:
+        tips.append(dict(icon='✅', title=f'Excellent coding score ({coding})',
+            desc='Top-tier coding scores give you a significant edge in technical rounds. Keep practicing to maintain this advantage.',
+            urgency='good'))
+    if apt >= 75:
+        tips.append(dict(icon='✅', title=f'Strong aptitude ({apt})',
+            desc='You are well-prepared for aptitude screening rounds. This is a reliable strength across all company types.',
+            urgency='good'))
+    if hacks >= 2:
+        tips.append(dict(icon='✅', title=f'{hacks} hackathon{"s" if hacks > 1 else ""} — great initiative',
+            desc='Hackathon participation shows competitive spirit and rapid problem-solving. Highlight specific challenges you solved.',
+            urgency='good'))
+    if certs >= 2:
+        tips.append(dict(icon='✅', title=f'{certs} certifications — shows commitment',
+            desc='Multiple certifications demonstrate continuous learning. Make sure they are relevant to your target roles.',
+            urgency='good'))
+    if comm >= 4:
+        tips.append(dict(icon='✅', title='Strong communication skills',
+            desc='Good communication is a major differentiator in HR and managerial rounds. Use this strength to your advantage.',
             urgency='good'))
 
-    has_gaps = any(t['urgency'] in ('urgent','improve') for t in tips)
-    if prediction == 1 and not has_gaps:
-        tips.append(dict(icon='🚀', title='You are in the competitive zone',
-            desc='Your profile clears most filters. Now focus: master DSA + system design, polish a 1-page ATS-friendly resume with quantified results, and practice mock interviews until confident.',
-            urgency='good'))
-
+    # Default tip if profile is neutral
     if not tips:
-        tips.append(dict(icon='📌', title='Start building your profile now',
-            desc='No single factor disqualifies you, but internships + projects + skills compound into a strong placement profile. Start with one project this month.',
+        tips.append(dict(icon='📌', title='Build a stronger profile step by step',
+            desc='Focus on one area at a time: add an internship, build a project, or improve your coding score. Small consistent efforts compound.',
             urgency='improve'))
 
     return tips
@@ -280,10 +345,58 @@ def generate_rain_html():
 
 
 # ─── Session State ─────────
-if 'page' not in st.session_state:
-    st.session_state.page = 'home'
-if 'result_data' not in st.session_state:
-    st.session_state.result_data = None
+def init_session_state():
+    defaults = {
+        'page': 'home',
+        'result_data': None,
+        'form_gender': None, 'form_stream': None, 'form_cgpa': None,
+        'form_tenth_board': None, 'form_tenth_marks': None,
+        'form_twelfth_board': None, 'form_twelfth_marks': None,
+        'form_communication': None, 'form_technical': None,
+        'form_internships': None, 'form_trainings': None,
+        'form_projects': None, 'form_backlogs': None,
+        'form_coding_score': None, 'form_aptitude_score': None,
+        'form_hackathons': None, 'form_certifications': None,
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+
+init_session_state()
+
+
+def save_form_values(gender, stream, cgpa, tenth_board, tenth_marks, twelfth_board,
+                     twelfth_marks, communication, technical, internships, trainings,
+                     projects, backlogs, coding_score, aptitude_score, hackathons,
+                     certifications):
+    st.session_state.form_gender = gender
+    st.session_state.form_stream = stream
+    st.session_state.form_cgpa = cgpa
+    st.session_state.form_tenth_board = tenth_board
+    st.session_state.form_tenth_marks = tenth_marks
+    st.session_state.form_twelfth_board = twelfth_board
+    st.session_state.form_twelfth_marks = twelfth_marks
+    st.session_state.form_communication = communication
+    st.session_state.form_technical = technical
+    st.session_state.form_internships = internships
+    st.session_state.form_trainings = trainings
+    st.session_state.form_projects = projects
+    st.session_state.form_backlogs = backlogs
+    st.session_state.form_coding_score = coding_score
+    st.session_state.form_aptitude_score = aptitude_score
+    st.session_state.form_hackathons = hackathons
+    st.session_state.form_certifications = certifications
+
+
+def clear_form_values():
+    keys = ['form_gender', 'form_stream', 'form_cgpa', 'form_tenth_board',
+            'form_tenth_marks', 'form_twelfth_board', 'form_twelfth_marks',
+            'form_communication', 'form_technical', 'form_internships',
+            'form_trainings', 'form_projects', 'form_backlogs',
+            'form_coding_score', 'form_aptitude_score', 'form_hackathons',
+            'form_certifications']
+    for k in keys:
+        st.session_state[k] = None
 
 
 # PAGE 1 — HOMEPAGE
@@ -345,7 +458,6 @@ if st.session_state.page == 'home':
 
 
 #  PAGE 2 — INPUT FORM
-
 elif st.session_state.page == 'input':
 
     st.markdown("""
@@ -363,6 +475,8 @@ elif st.session_state.page == 'input':
 
     st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
+    s = st.session_state
+
     with st.form("pf", clear_on_submit=False, enter_to_submit=False):
 
         st.markdown("""
@@ -375,34 +489,47 @@ elif st.session_state.page == 'input':
 
         c1, c2, c3 = st.columns(3)
         with c1:
-            gender = st.selectbox("Gender", ["Male", "Female", "Others"], index=None, placeholder="Select gender...")
+            gender = st.selectbox("Gender", ["Male", "Female", "Others"],
+                                  index=None if s.form_gender is None else ["Male", "Female", "Others"].index(s.form_gender),
+                                  placeholder="Select gender...")
         with c2:
             stream = st.selectbox("Stream", [
                 "Computer Science", "Information Technology", "Electronics",
                 "Mechanical", "Civil", "Electrical", "Other"
-            ], index=None, placeholder="Select stream...")
+            ], index=None if s.form_stream is None else [
+                "Computer Science", "Information Technology", "Electronics",
+                "Mechanical", "Civil", "Electrical", "Other"
+            ].index(s.form_stream), placeholder="Select stream...")
         with c3:
-            cgpa = st.number_input("CGPA (out of 10)", 0.0, 10.0, None, 0.01, "%.2f")
+            cgpa = st.number_input("CGPA (out of 10)", 0.0, 10.0, s.form_cgpa, 0.01, "%.2f")
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
         c4, c5, c6 = st.columns(3)
         with c4:
-            tenth_board = st.selectbox("10th Board", ["CBSE", "State", "ICSE", "Other"], index=None, placeholder="Select board...")
+            tenth_board = st.selectbox("10th Board", ["CBSE", "State", "ICSE", "Other"],
+                                       index=None if s.form_tenth_board is None else ["CBSE", "State", "ICSE", "Other"].index(s.form_tenth_board),
+                                       placeholder="Select board...")
         with c5:
-            tenth_marks = st.number_input("10th Marks (%)", 0.0, 100.0, None, 0.1, "%.1f")
+            tenth_marks = st.number_input("10th Marks (%)", 0.0, 100.0, s.form_tenth_marks, 0.1, "%.1f")
         with c6:
-            twelfth_board = st.selectbox("12th Board", ["CBSE", "State", "ICSE", "Other"], index=None, placeholder="Select board...")
+            twelfth_board = st.selectbox("12th Board", ["CBSE", "State", "ICSE", "Other"],
+                                         index=None if s.form_twelfth_board is None else ["CBSE", "State", "ICSE", "Other"].index(s.form_twelfth_board),
+                                         placeholder="Select board...")
 
         st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
 
         c7, c8, c9 = st.columns(3)
         with c7:
-            twelfth_marks = st.number_input("12th Marks (%)", 0.0, 100.0, None, 0.1, "%.1f")
+            twelfth_marks = st.number_input("12th Marks (%)", 0.0, 100.0, s.form_twelfth_marks, 0.1, "%.1f")
         with c8:
-            communication = st.selectbox("Communication Level", [1, 2, 3, 4, 5], index=None, placeholder="Select level...")
+            communication = st.selectbox("Communication Level", [1, 2, 3, 4, 5],
+                                         index=None if s.form_communication is None else [1, 2, 3, 4, 5].index(s.form_communication),
+                                         placeholder="Select level...")
         with c9:
-            technical = st.selectbox("Technical Skills", ["No", "Yes"], index=None, placeholder="Select...")
+            technical = st.selectbox("Technical Skills", ["No", "Yes"],
+                                       index=None if s.form_technical is None else ["No", "Yes"].index(s.form_technical),
+                                       placeholder="Select...")
 
         st.markdown("""
         <div class="form-section" style="margin-top:1.5rem;">
@@ -416,13 +543,13 @@ elif st.session_state.page == 'input':
 
         c10, c11, c12, c13 = st.columns(4)
         with c10:
-            internships = st.number_input("Internships", 0, 20, None, 1)
+            internships = st.number_input("Internships", 0, 20, s.form_internships, 1)
         with c11:
-            trainings = st.number_input("Trainings / Courses", 0, 20, None, 1)
+            trainings = st.number_input("Trainings / Courses", 0, 20, s.form_trainings, 1)
         with c12:
-            projects = st.number_input("Projects", 0, 20, None, 1)
+            projects = st.number_input("Projects", 0, 20, s.form_projects, 1)
         with c13:
-            backlogs = st.number_input("Active Backlogs", 0, 20, None, 1)
+            backlogs = st.number_input("Active Backlogs", 0, 20, s.form_backlogs, 1)
 
         st.markdown("""
         <div class="form-section" style="margin-top:1.5rem;">
@@ -436,15 +563,15 @@ elif st.session_state.page == 'input':
 
         c14, c15 = st.columns(2)
         with c14:
-            coding_score = st.number_input("Coding Score (0-100) from previous tests", 0, 100, None, 1)
+            coding_score = st.number_input("Coding Score (0-100)", 0, 100, s.form_coding_score, 1)
         with c15:
-            aptitude_score = st.number_input("Aptitude Score (0-100) from previous tests", 0, 100, None, 1)
+            aptitude_score = st.number_input("Aptitude Score (0-100)", 0, 100, s.form_aptitude_score, 1)
 
         c16, c17 = st.columns(2)
         with c16:
-            hackathons_count = st.number_input("Hackathons Count", 0, 20, None, 1)
+            hackathons_count = st.number_input("Hackathons Count", 0, 20, s.form_hackathons, 1)
         with c17:
-            certifications_count = st.number_input("Certifications Count", 0, 20, None, 1)
+            certifications_count = st.number_input("Certifications Count", 0, 20, s.form_certifications, 1)
 
         submitted = st.form_submit_button("🔮  Predict My Placement Chances", width='stretch')
 
@@ -462,31 +589,40 @@ elif st.session_state.page == 'input':
 
         empty_fields = [k for k, v in required_fields.items() if v is None]
         if empty_fields:
+            save_form_values(gender, stream, cgpa, tenth_board, tenth_marks, twelfth_board,
+                             twelfth_marks, communication, technical, internships, trainings,
+                             projects, backlogs, coding_score, aptitude_score, hackathons_count,
+                             certifications_count)
             st.error(f"⚠️ Please fill all fields. Missing: {', '.join(empty_fields)}")
         else:
+            save_form_values(gender, stream, cgpa, tenth_board, tenth_marks, twelfth_board,
+                             twelfth_marks, communication, technical, internships, trainings,
+                             projects, backlogs, coding_score, aptitude_score, hackathons_count,
+                             certifications_count)
+
             fv = {
                 'Gender': gender, '10th board': tenth_board, '10th marks': tenth_marks,
                 '12th board': twelfth_board, '12th marks': twelfth_marks, 'Stream': stream,
-                'Cgpa': cgpa,
-                'Internships(Y/N)':       "Yes" if internships > 0 else "No",
-                'Training(Y/N)':          "Yes" if trainings   > 0 else "No",
-                'Any Backlogs?':          "Yes" if backlogs    > 0 else "No",
-                'Innovative Project(Y/N)':"Yes" if projects    > 0 else "No",
-                'Communication level': communication,
-                'Technical skills(Y/N)': technical,
-                '_backlogs': backlogs, '_internships': internships,
-                '_projects': projects, '_trainings': trainings,
+                'Cgpa': cgpa, 'Communication level': communication,
+                'Technical skills(Y/N)': technical, 'Internships': internships,
+                'Trainings': trainings, 'Projects': projects, 'Backlogs': backlogs,
+                'Coding Score': coding_score, 'Aptitude Score': aptitude_score,
+                'Hackathons Count': hackathons_count, 'Certifications Count': certifications_count,
             }
-            input_df   = build_input({k: v for k, v in fv.items() if not k.startswith('_')})
+
+            input_df = build_input(fv)
             prediction = rf_model.predict(input_df)[0]
-            proba      = rf_model.predict_proba(input_df)[0]
+            proba = rf_model.predict_proba(input_df)[0]
             placed_pct = round(proba[1] * 100, 1)
-            recs       = get_recommendations(fv, prediction)
+            recs = get_recommendations(fv, prediction)
 
             st.session_state.result_data = {
                 'prediction': prediction, 'placed_pct': placed_pct, 'recs': recs,
                 'cgpa': cgpa, 'backlogs': backlogs, 'internships': internships,
                 'projects': projects, 'communication': communication, 'technical': technical,
+                'coding_score': coding_score, 'aptitude_score': aptitude_score,
+                'hackathons': hackathons_count, 'trainings': trainings,
+                'certifications': certifications_count,
             }
             st.session_state.page = 'result'
             st.rerun()
@@ -496,18 +632,22 @@ elif st.session_state.page == 'input':
 
 
 #  PAGE 3 — RESULTS
-
 elif st.session_state.page == 'result':
-    d          = st.session_state.result_data
+    d = st.session_state.result_data
     prediction = d['prediction']
     placed_pct = d['placed_pct']
-    recs       = d['recs']
-    cgpa       = d['cgpa']
-    backlogs   = d['backlogs']
-    internships= d['internships']
-    projects   = d['projects']
-    comm       = d['communication']
-    tech       = d['technical']
+    recs = d['recs']
+    cgpa = d['cgpa']
+    backlogs = d['backlogs']
+    internships = d['internships']
+    projects = d['projects']
+    comm = d['communication']
+    tech = d['technical']
+    coding = d['coding_score']
+    apt = d['aptitude_score']
+    hacks = d['hackathons']
+    trains = d['trainings']
+    certs = d['certifications']
 
     st.markdown("""
     <script>
@@ -562,12 +702,13 @@ elif st.session_state.page == 'result':
         """, unsafe_allow_html=True)
 
     profile_items = [
-        ("CGPA",          min(cgpa / 10.0, 1.0),             "#7c3aed"),
-        ("Communication", (comm - 1) / 4.0,                  "#06b6d4"),
-        ("Internships",   min(internships / 3.0, 1.0),        "#10b981"),
-        ("Projects",      min(projects / 5.0, 1.0),           "#f97316"),
-        ("No Backlogs",   1.0 if backlogs == 0
-                          else max(0.0, 1.0 - backlogs*0.33), "#f43f5e"),
+        ("CGPA",          min(cgpa / 10.0, 1.0),                              "#7c3aed"),
+        ("Coding",        min(coding / 100.0, 1.0),                           "#06b6d4"),
+        ("Aptitude",      min(apt / 100.0, 1.0),                              "#f59e0b"),
+        ("Communication", (comm - 1) / 4.0,                                   "#10b981"),
+        ("Internships",   min(internships / 3.0, 1.0),                        "#ec4899"),
+        ("Projects",      min(projects / 5.0, 1.0),                           "#f97316"),
+        ("No Backlogs",   1.0 if backlogs == 0 else max(0.0, 1.0 - backlogs*0.25), "#f43f5e"),
     ]
 
     bars_html = '<div class="profile-score-wrap"><div class="ps-title">Your Profile Breakdown</div>'
@@ -584,6 +725,24 @@ elif st.session_state.page == 'result':
         )
     bars_html += '</div>'
     st.markdown(bars_html, unsafe_allow_html=True)
+
+    stats_html = '<div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:1rem 0;">'
+    stats = [
+        (f"🎯 {internships}", "Internship" + ("s" if internships != 1 else ""), "#ec4899"),
+        (f"🔬 {projects}", "Project" + ("s" if projects != 1 else ""), "#f97316"),
+        (f"📖 {trains}", "Training" + ("s" if trains != 1 else ""), "#8b5cf6"),
+        (f"🏆 {hacks}", "Hackathon" + ("s" if hacks != 1 else ""), "#06b6d4"),
+        (f"🏅 {certs}", "Certification" + ("s" if certs != 1 else ""), "#10b981"),
+    ]
+    for text, label, color in stats:
+        stats_html += (
+            f'<div style="background:rgba(255,255,255,0.95);border-radius:12px;padding:10px 16px;'
+            f'border:1.5px solid {color}30;text-align:center;min-width:90px;">'
+            f'<div style="font-size:1.1rem;font-weight:800;color:{color};">{text}</div>'
+            f'<div style="font-size:0.7rem;color:#6b7280;font-weight:600;">{label}</div></div>'
+        )
+    stats_html += '</div>'
+    st.markdown(stats_html, unsafe_allow_html=True)
 
     urgent  = [r for r in recs if r['urgency'] == 'urgent']
     improve = [r for r in recs if r['urgency'] == 'improve']
@@ -623,6 +782,7 @@ elif st.session_state.page == 'result':
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
     if st.button("🔄  Predict for Another Student", width='stretch'):
+        clear_form_values()
         st.session_state.page = 'input'
         st.rerun()
 
